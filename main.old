@@ -1,0 +1,104 @@
+package main
+
+import (
+	"bufio"
+	"encoding/json"
+	"fmt"
+	"internal/color"
+	"io/ioutil"
+	"log"
+	"net/http"
+	"os"
+	"strings"
+)
+
+type Response struct {
+	Areas []Area `json:"results"`
+}
+
+type Pokemon struct {
+	EntryNo int            `json:"entry_number"`
+	Species PokemonSpecies `json:"pokemon_species"`
+}
+
+type PokemonSpecies struct {
+	Name string `json:"name"`
+}
+
+type Area struct {
+	Name string `json:"name"`
+}
+
+func getAreas(page int) Response {
+	offsetURL := fmt.Sprintf("https://pokeapi.co/api/v2/location/?offset=%d&limit=%d", (page-1)*20, 20)
+	response, err := http.Get(offsetURL)
+
+	if err != nil {
+		fmt.Print(err.Error())
+		os.Exit(1)
+	}
+
+	responseData, err := ioutil.ReadAll(response.Body)
+	if err != nil {
+		fmt.Print(err.Error())
+		log.Fatal(err)
+	}
+
+	//fmt.Println(string(responseData))
+
+	var responseObject Response
+	json.Unmarshal(responseData, &responseObject)
+
+	return responseObject
+}
+
+func titleCleanup(title string) string {
+	myArray := strings.Split(title, "-")
+	result := ""
+	for i := 0; i < len(myArray); i++ {
+		result += strings.ToUpper(myArray[i][0:1]) + myArray[i][1:] + " "
+	}
+
+	return result
+}
+
+func main() {
+
+	areasPage := 0
+
+	myScanner := bufio.NewScanner(os.Stdin)
+
+	//blocks on scan, prints line input by scan action
+	prompt := fmt.Sprintf(color.Yellow + "Pokedex > " + color.Reset)
+	fmt.Print(prompt)
+	for myScanner.Scan() {
+
+		switch input := myScanner.Text(); input {
+		case "exit":
+			fmt.Println("Shutting down.")
+			return
+		case "help":
+			fmt.Println("exit: Shut down the program\nhelp: Displays input options\nmap: Displays the next 20 locations\nmapb: Displays the previous 20 locations")
+		case "map":
+			areasPage++
+			responseObject := getAreas(areasPage)
+			for i := 0; i < len(responseObject.Areas); i++ {
+				fmt.Println(titleCleanup(responseObject.Areas[i].Name))
+			}
+		case "mapb":
+			areasPage--
+			if areasPage < 1 {
+				areasPage = 0
+				fmt.Println("You are at the front of the map already")
+				break
+			}
+			responseObject := getAreas(areasPage)
+			for i := 0; i < len(responseObject.Areas); i++ {
+				fmt.Println(titleCleanup(responseObject.Areas[i].Name))
+			}
+		default:
+			fmt.Println("Not a known command, try 'help'")
+		}
+		fmt.Print(prompt)
+	}
+}
